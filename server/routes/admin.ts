@@ -303,8 +303,14 @@ adminRouter.get("/analytics/overview", requireAdmin(), async (req, res) => {
     FROM generate_series(date_trunc('day', now()) - make_interval(days => ${days - 1}), date_trunc('day', now()), interval '1 day') d
     ORDER BY d`);
   const topArticles = await rows(sql`
-    SELECT a.id, a.slug, a.title, count(*)::int AS views FROM events e JOIN articles a ON a.id = e.article_id
-    WHERE e.type = 'article_view' AND e.ts > ${since} GROUP BY a.id ORDER BY views DESC LIMIT 10`);
+    SELECT a.id, a.slug, a.title,
+      count(*) FILTER (WHERE e.type = 'article_view')::int AS views,
+      count(*) FILTER (WHERE e.type = 'article_feedback' AND e.props->>'helpful' = 'true')::int AS helpful_yes,
+      count(*) FILTER (WHERE e.type = 'article_feedback' AND e.props->>'helpful' = 'false')::int AS helpful_no
+    FROM events e JOIN articles a ON a.id = e.article_id
+    WHERE e.type IN ('article_view', 'article_feedback') AND e.ts > ${since}
+    GROUP BY a.id HAVING count(*) FILTER (WHERE e.type = 'article_view') > 0
+    ORDER BY views DESC LIMIT 10`);
   const topSearches = await rows(sql`
     SELECT lower(query) AS query, count(*)::int AS n, round(avg(result_count))::int AS avg_results,
       count(*) FILTER (WHERE clicked_article_id IS NOT NULL)::int AS clicks

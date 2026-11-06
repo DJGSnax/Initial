@@ -66,8 +66,9 @@ export function requireAdmin(minRole: "viewer" | "editor" | "owner" = "viewer") 
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.admin) return res.status(401).json({ error: "Not signed in" });
     if (rank[req.admin.role] < rank[minRole]) return res.status(403).json({ error: "Insufficient role" });
-    // Admin API is same-origin only: require JSON for writes so plain cross-site forms can't post.
-    if (!["GET", "HEAD"].includes(req.method) && !req.is("application/json") && req.headers["content-length"] !== "0") {
+    // Admin API is same-origin only: any request body must be JSON so plain cross-site forms can't post.
+    // req.is() returns null when there is no body (e.g. a browser DELETE), false for a non-JSON body.
+    if (!["GET", "HEAD"].includes(req.method) && req.is("application/json") === false) {
       return res.status(415).json({ error: "Expected application/json" });
     }
     next();

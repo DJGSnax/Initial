@@ -76,8 +76,10 @@ function onClick(e: MouseEvent) {
   clicks = clicks.filter((c) => now - c.t < 800 && Math.hypot(c.x - e.clientX, c.y - e.clientY) < 40);
   clicks.push({ t: now, x: e.clientX, y: e.clientY });
   if (clicks.length === 3) {
+    // At document level e.target is retargeted to the shadow host, so this catches clicks on our own UI
+    // (closest() on the inner element can't see past the shadow root).
+    if ((e.target as Element | null)?.closest?.("#lumen-kb-root")) return;
     const target = e.composedPath()[0] as Element;
-    if (target?.closest?.("#lumen-kb-root")) return;
     const label = safeLabel(target instanceof Element ? target : null);
     add({ type: "rage_click", label });
     track({ type: "rage_click", props: label ? { label } : undefined });

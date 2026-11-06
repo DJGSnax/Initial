@@ -16,6 +16,15 @@ export function HelpArticle() {
     [slug],
   );
   const [voted, setVoted] = useState<boolean | null>(null);
+  // Anonymous: no session or visitor id, just which article and the answer.
+  const vote = (helpful: boolean) => {
+    setVoted(helpful);
+    fetch("/api/public/events", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ events: [{ type: "article_feedback", articleSlug: slug, path: location.pathname, props: { helpful } }] }),
+    }).catch(() => {});
+  };
   useEffect(() => {
     setVoted(null);
     if (data) document.title = data.title;
@@ -64,10 +73,10 @@ export function HelpArticle() {
           {voted === null ? (
             <>
               <span className="text-zinc-600 dark:text-zinc-400">Did this answer your question?</span>
-              <button onClick={() => setVoted(true)} className="rounded-lg border border-zinc-300 px-3 py-1 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+              <button onClick={() => vote(true)} className="rounded-lg border border-zinc-300 px-3 py-1 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                 Yes
               </button>
-              <button onClick={() => setVoted(false)} className="rounded-lg border border-zinc-300 px-3 py-1 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+              <button onClick={() => vote(false)} className="rounded-lg border border-zinc-300 px-3 py-1 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                 No
               </button>
             </>

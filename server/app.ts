@@ -20,6 +20,8 @@ export async function createApp() {
       contentSecurityPolicy: false, // set per-route below; the embed script must load cross-origin
       crossOriginResourcePolicy: { policy: "cross-origin" },
       crossOriginEmbedderPolicy: false,
+      // The element picker opens a host page on another origin and needs window.opener to send the selector back.
+      crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     }),
   );
   app.use(express.json({ limit: "1mb" }));

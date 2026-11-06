@@ -14,6 +14,11 @@ let input: HTMLInputElement;
 let backBtn: HTMLButtonElement;
 let answerAbort: AbortController | null = null;
 let searchTimer: number | undefined;
+let finalTimer: number | undefined;
+/** Query already logged and answered by AI, so a pause after Enter doesn't repeat it. */
+let finalizedQuery = "";
+/** Results view saved when opening an article, restored by Back. */
+let savedResults: Node[] | null = null;
 let currentSearchId: number | null = null;
 let lastQuery = "";
 
@@ -50,15 +55,19 @@ export function openPanel(opts: { article?: string; query?: string } = {}) {
     input = h("input", { type: "search", placeholder: "Search for answers…", "aria-label": "Search help articles", autocomplete: "off" });
     input.addEventListener("input", () => {
       clearTimeout(searchTimer);
-      searchTimer = window.setTimeout(() => runSearch(input.value), 250);
+      clearTimeout(finalTimer);
+      // Instant, unlogged results while typing; the logged search and AI overview wait until typing stops.
+      searchTimer = window.setTimeout(() => runSearch(input.value, false), 250);
+      finalTimer = window.setTimeout(() => runSearch(input.value, true), 1200);
     });
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         clearTimeout(searchTimer);
+        clearTimeout(finalTimer);
         runSearch(input.value, true);
       }
     });
-    backBtn = h("button", { class: "kb-x", "aria-label": "Back", style: "display:none", onclick: () => (lastQuery ? runSearch(lastQuery) : renderHome()) }, icon("back"));
+    backBtn = h("button", { class: "kb-x", "aria-label": "Back", style: "display:none", onclick: goBack }, icon("back"));
     body = h("div", { class: "kb-panel-body", role: "region", "aria-live": "polite" });
     panel = h(
       "div",
@@ -98,13 +107,27 @@ export function openPanel(opts: { article?: string; query?: string } = {}) {
 
 export function closePanel() {
   answerAbort?.abort();
+  clearTimeout(searchTimer);
+  clearTimeout(finalTimer);
   panel?.remove();
   panel = null;
+  // A reopened panel starts fresh, so the same query can be searched again.
+  lastQuery = finalizedQuery = "";
+  savedResults = null;
   launcher?.focus();
+}
+
+function goBack() {
+  backBtn.style.display = "none";
+  if (savedResults && lastQuery) body.replaceChildren(...savedResults);
+  else renderHome();
+  savedResults = null;
 }
 
 async function renderHome() {
   lastQuery = "";
+  finalizedQuery = "";
+  savedResults = null;
   backBtn.style.display = "none";
   body.replaceChildren(h("div", { class: "kb-shimmer", style: "width:40%" }), h("div", { class: "kb-shimmer" }), h("div", { class: "kb-shimmer", style: "width:80%" }));
   const ctx = await getContextArticles().catch(() => []);
@@ -148,28 +171,35 @@ function safeSnippet(s: string) {
   return s.replace(/<(?!\/?mark>)[^>]*>/g, "").replace(/&(?![a-z#0-9]+;)/gi, "&amp;");
 }
 
-async function runSearch(qRaw: string, fromEnter = false) {
+async function runSearch(qRaw: string, final: boolean) {
   const q = qRaw.trim();
+  if (!q) {
+    answerAbort?.abort();
+    return renderHome();
+  }
+  if (q === lastQuery && (!final || q === finalizedQuery)) return;
   answerAbort?.abort();
-  if (!q) return renderHome();
-  if (q === lastQuery && !fromEnter) return;
   lastQuery = q;
+  if (final) finalizedQuery = q;
+  savedResults = null;
   backBtn.style.display = "none";
 
-  const overview = state.cfg!.ai.overview && q.length >= 3 ? h("div", { class: "kb-overview", "aria-busy": "true" }) : null;
+  const overview = final && state.cfg!.ai.overview && q.length >= 3 ? h("div", { class: "kb-overview", "aria-busy": "true" }) : null;
   const results = h("div", {});
-  body.replaceChildren(...[overview, results].filter(Boolean) as HTMLElement[]);
+  body.replaceChildren(...([overview, results].filter(Boolean) as HTMLElement[]));
 
   let res: { searchId: number | null; hits: SearchHit[] };
   try {
-    res = await search(q);
+    res = await search(q, final);
   } catch {
     results.replaceChildren(h("p", { class: "kb-empty" }, "Search is unavailable right now."));
     return;
   }
   if (q !== lastQuery) return;
-  currentSearchId = res.searchId;
-  behavior.noteSearch(q, res.hits.length);
+  if (final) {
+    currentSearchId = res.searchId;
+    behavior.noteSearch(q, res.hits.length);
+  }
   results.replaceChildren(
     res.hits.length
       ? h("div", {}, h("p", { class: "kb-section-label" }, "Articles"), list(res.hits.map((x) => ({ slug: x.slug, title: x.title, meta: safeSnippet(x.snippet || x.summary), html: true }))))
@@ -235,7 +265,8 @@ function renderOverview(box: HTMLElement, q: string, searchId: number | null) {
 
 export async function showArticle(slug: string) {
   if (!panel) return openPanel({ article: slug });
-  answerAbort?.abort();
+  // Keep the results (and any finished AI overview) so Back returns to them without searching again.
+  if (lastQuery && !savedResults) savedResults = Array.from(body.childNodes);
   backBtn.style.display = "";
   body.replaceChildren(h("div", { class: "kb-shimmer", style: "width:70%;height:18px" }), h("div", { class: "kb-shimmer" }), h("div", { class: "kb-shimmer" }), h("div", { class: "kb-shimmer", style: "width:50%" }));
   try {

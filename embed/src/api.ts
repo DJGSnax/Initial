@@ -55,8 +55,9 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return r.status === 204 ? (undefined as T) : r.json();
 }
 
-export function search(q: string): Promise<{ searchId: number | null; hits: SearchHit[] }> {
-  return post("/search", { q, source: "widget", path: location.pathname, ...ids() });
+/** log=false for as-you-type previews, so analytics only see the query people settled on. */
+export function search(q: string, log = true): Promise<{ searchId: number | null; hits: SearchHit[] }> {
+  return post("/search", { q, log, source: "widget", path: location.pathname, ...ids() });
 }
 
 export function searchFeedback(searchId: number, body: { helpful?: boolean; articleSlug?: string }) {

@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import rateLimit from "express-rate-limit";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import crypto from "node:crypto";
 import { db } from "../db/client";
 import { articles, collections, events, prompts, searches } from "../db/schema";
@@ -29,7 +29,9 @@ async function cors(req: Request, res: Response, next: NextFunction) {
   const origin = req.headers.origin;
   if (origin) {
     const { allowedOrigins } = await getSettings();
-    const ok = allowedOrigins.includes("*") || allowedOrigins.includes(origin) || origin === env.publicUrl || (!env.isProd && allowedOrigins.length === 0);
+    // Our own pages (help center) are always allowed, whatever PUBLIC_URL says.
+    const sameOrigin = origin === env.publicUrl || origin === `${req.protocol}://${req.get("host")}`;
+    const ok = sameOrigin || allowedOrigins.includes("*") || allowedOrigins.includes(origin) || (!env.isProd && allowedOrigins.length === 0);
     if (ok) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
@@ -53,14 +55,22 @@ export function renderDefinition(def: PromptDefinition): PromptDefinition {
   return { ...def, steps: def.steps.map((s) => ({ ...s, bodyHtml: renderMarkdown(s.body) })) };
 }
 
+// Rendering + sanitizing Markdown is the expensive part of /config; it only changes when a prompt is saved.
+const embedCache = new Map<number, { updatedAt: number; value: EmbedPrompt }>();
+
 function toEmbed(p: typeof prompts.$inferSelect): EmbedPrompt {
-  return {
+  const updatedAt = p.updatedAt.getTime();
+  const hit = embedCache.get(p.id);
+  if (hit && hit.updatedAt === updatedAt && hit.value.priority === p.priority) return hit.value;
+  const value: EmbedPrompt = {
     id: p.id,
     type: p.type,
     priority: p.priority,
-    version: crypto.createHash("sha1").update(p.updatedAt.toISOString()).digest("hex").slice(0, 8),
+    version: crypto.createHash("sha1").update(String(updatedAt)).digest("hex").slice(0, 8),
     ...renderDefinition(p.definition),
   };
+  embedCache.set(p.id, { updatedAt, value });
+  return value;
 }
 
 publicRouter.get("/config", async (_req, res) => {
@@ -97,14 +107,17 @@ publicRouter.post("/pick/verify", async (req, res) => {
 // ---------------------------------------------------------------------------
 // Analytics ingestion
 
-const slugCache = new Map<string, number | null>();
 async function articleIdForSlug(slug: string | undefined) {
   if (!slug) return null;
-  if (slugCache.has(slug)) return slugCache.get(slug)!;
-  const a = await db().query.articles.findFirst({ where: eq(articles.slug, slug), columns: { id: true } });
-  slugCache.set(slug, a?.id ?? null);
-  if (slugCache.size > 2000) slugCache.clear();
-  return a?.id ?? null;
+  return (await articleIdsForSlugs([slug])).get(slug) ?? null;
+}
+
+/** One query for all slugs in a batch. Not cached, so new, renamed or deleted articles are always current. */
+async function articleIdsForSlugs(slugs: string[]): Promise<Map<string, number>> {
+  const unique = [...new Set(slugs.filter((s) => typeof s === "string" && s.length > 0 && s.length <= 120))];
+  if (!unique.length) return new Map();
+  const found = await db().select({ id: articles.id, slug: articles.slug }).from(articles).where(inArray(articles.slug, unique));
+  return new Map(found.map((a) => [a.slug, a.id]));
 }
 
 publicRouter.post("/events", async (req, res) => {
@@ -117,8 +130,10 @@ publicRouter.post("/events", async (req, res) => {
   const traits = sessionId ? sanitizeTraits(body.traits, privacy.allowedTraits) : {};
   const device = deviceClass(req.headers["user-agent"]);
 
+  const batch = body.events.slice(0, 50);
+  const articleIds = await articleIdsForSlugs(batch.map((e) => e.articleSlug ?? ""));
   const valuesToInsert = [];
-  for (const e of body.events.slice(0, 50)) {
+  for (const e of batch) {
     if (!EVENT_TYPES.includes(e.type)) continue;
     const props = sanitizeProps(e.props) ?? {};
     if (e.type === "custom" && e.name) props.name = scrubText(String(e.name), 60);
@@ -129,7 +144,7 @@ publicRouter.post("/events", async (req, res) => {
       sessionId,
       visitorId,
       promptId: Number.isInteger(e.promptId) ? e.promptId : null,
-      articleId: await articleIdForSlug(e.articleSlug),
+      articleId: (e.articleSlug && articleIds.get(e.articleSlug)) || null,
       step: Number.isInteger(e.step) ? e.step : null,
       path: sanitizePath(e.path),
       device,

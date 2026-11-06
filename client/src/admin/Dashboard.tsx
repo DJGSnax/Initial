@@ -7,7 +7,7 @@ type Overview = {
   days: number;
   totals: Record<string, number>;
   daily: { day: string; page_views: number; searches: number; article_views: number }[];
-  topArticles: { id: number; slug: string; title: string; views: number }[];
+  topArticles: { id: number; slug: string; title: string; views: number; helpful_yes: number; helpful_no: number }[];
   topSearches: { query: string; n: number; avg_results: number; clicks: number }[];
   zeroResults: { query: string; n: number }[];
 };
@@ -93,7 +93,7 @@ export function Dashboard() {
           </div>
 
           <Card title="Most read articles">
-            <Table head={["Article", "Views"]} empty="No article views yet">
+            <Table head={["Article", "Views", "Helpful"]} empty="No article views yet">
               {data.topArticles.map((a) => (
                 <tr key={a.id}>
                   <Td>
@@ -102,6 +102,7 @@ export function Dashboard() {
                     </Link>
                   </Td>
                   <Td className="tabular-nums">{a.views}</Td>
+                  <Td className="tabular-nums">{a.helpful_yes + a.helpful_no ? `${pct(a.helpful_yes, a.helpful_yes + a.helpful_no)} of ${a.helpful_yes + a.helpful_no}` : "–"}</Td>
                 </tr>
               ))}
             </Table>

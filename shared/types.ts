@@ -175,6 +175,7 @@ export type EventType =
   | "nudge_shown"
   | "nudge_clicked"
   | "nudge_dismissed"
+  | "article_feedback"
   | "custom";
 
 export const EVENT_TYPES: EventType[] = [
@@ -191,6 +192,7 @@ export const EVENT_TYPES: EventType[] = [
   "nudge_shown",
   "nudge_clicked",
   "nudge_dismissed",
+  "article_feedback",
   "custom",
 ];
 

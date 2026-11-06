@@ -48,7 +48,10 @@ const CACHE_MS = 60 * 60 * 1000;
 
 export function overviewCacheKey(query: string, docs: SourceDoc[]) {
   const norm = query.toLowerCase().replace(/\s+/g, " ").trim();
-  return crypto.createHash("sha1").update(norm + "|" + docs.map((d) => d.id).join(",")).digest("hex");
+  // Hash the source text too, so editing an article invalidates answers built from the old version.
+  const h = crypto.createHash("sha1").update(norm);
+  for (const d of docs) h.update(`|${d.id}|${d.title}|${d.body}`);
+  return h.digest("hex");
 }
 
 export function cachedOverview(key: string) {
@@ -73,7 +76,8 @@ export async function streamOverview(
   const stream = anthropic().beta.messages.stream(
     {
       model: env.aiModel,
-      max_tokens: 2000,
+      // Thinking is always on for this model and counts toward max_tokens; leave room so answers aren't cut off.
+      max_tokens: 16000,
       output_config: { effort: "low" },
       system: OVERVIEW_SYSTEM,
       messages: [{ role: "user", content: `${sourcesBlock(docs)}\n\nSearch query: ${query}` }],
@@ -104,7 +108,8 @@ export async function streamOverview(
   const text = full.trim();
   const answered = text.length > 0 && !text.startsWith("NO_ANSWER");
   if (!released && answered) onText(text);
-  answerCache.set(key, { text: answered ? text : "NO_ANSWER", at: Date.now() });
+  // Only cache complete answers; a max_tokens cut-off should be retried next time.
+  if (final.stop_reason === "end_turn") answerCache.set(key, { text: answered ? text : "NO_ANSWER", at: Date.now() });
   if (answerCache.size > 500) answerCache.delete(answerCache.keys().next().value!);
   return { text, answered };
 }
@@ -128,7 +133,7 @@ export async function chooseNudge(input: {
 }) {
   const res = await anthropic().beta.messages.parse({
     model: env.aiModel,
-    max_tokens: 2000,
+    max_tokens: 8000,
     output_config: { effort: "low", format: betaZodOutputFormat(NudgeSchema) },
     system:
       "You decide whether to show a small, dismissible help suggestion inside a web app when behavior suggests the user is stuck. Be conservative: an irrelevant suggestion is worse than none. Only pick a source that directly addresses the task on this page.",

@@ -238,3 +238,38 @@ test("embed bundle is served cross-origin", async () => {
   assert.ok([200, 503].includes(r.status));
   assert.equal(r.headers.get("cross-origin-resource-policy"), "cross-origin");
 });
+
+test("regression: bodiless DELETE from the admin UI is accepted", async () => {
+  const r = await call("/api/admin/collections", { method: "POST", json: { name: "Temp" } });
+  const del = await call(`/api/admin/collections/${r.body.id}`, { method: "DELETE" });
+  assert.equal(del.status, 200);
+  const form = await call(`/api/admin/collections/${r.body.id}`, { method: "DELETE", body: "a=1", headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+  assert.equal(form.status, 415, "non-JSON bodies still rejected");
+});
+
+test("regression: COOP allows the picker popup to keep window.opener", async () => {
+  const r = await call("/healthz");
+  assert.equal(r.headers.get("cross-origin-opener-policy"), "same-origin-allow-popups");
+});
+
+test("regression: help center's own origin passes CORS even when PUBLIC_URL differs", async () => {
+  const host = new URL(base).host;
+  const r = await call("/api/public/search", { method: "POST", json: { q: "rotate", log: false }, headers: { Origin: `http://${host}` } });
+  assert.equal(r.status, 200);
+});
+
+test("regression: article feedback and slug lookups resolve per batch", async () => {
+  const r = await call("/api/public/events", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ events: [{ type: "article_feedback", articleSlug: "rotating-api-keys", props: { helpful: false } }, { type: "article_view", articleSlug: "does-not-exist" }] }),
+  });
+  assert.equal(r.body.accepted, 2);
+  const { rows } = await import("../server/db/client");
+  const { sql } = await import("drizzle-orm");
+  const ev = await rows<any>(sql`SELECT type, article_id, props FROM events WHERE type IN ('article_feedback') OR (type = 'article_view' AND article_id IS NULL)`);
+  const fb = ev.find((e) => e.type === "article_feedback");
+  assert.equal(fb.article_id, articleId);
+  assert.equal(fb.props.helpful, false);
+  assert.ok(ev.some((e) => e.type === "article_view" && e.article_id === null));
+});
