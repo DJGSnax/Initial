@@ -69,7 +69,7 @@ export async function createApp() {
 
   // Demo host page for trying the snippet locally
   app.get(["/demo", "/demo/*splat"], (_req, res) => {
-    res.type("html").send(fs.readFileSync(path.resolve("scripts/demo.html"), "utf8").replaceAll("%BASE%", env.publicUrl));
+    res.type("html").sendFile(path.resolve("scripts/demo.html"));
   });
 
   app.get("/", (_req, res) => res.redirect("/help"));
