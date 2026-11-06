@@ -1,5 +1,6 @@
 import { env } from "./env";
-import { initDb, rows } from "./db/client";
+import { initDb, rows, MEMORY_DB } from "./db/client";
+import { seedDemo } from "./seed";
 import { createApp } from "./app";
 import { sql, count } from "drizzle-orm";
 import { db } from "./db/client";
@@ -27,6 +28,7 @@ async function retentionSweep() {
 
 await initDb();
 await seedAdmin();
+if (env.seedDemo) await seedDemo();
 await retentionSweep();
 setInterval(() => retentionSweep().catch((err) => console.error("[retention]", err)), 6 * 3600_000).unref();
 
@@ -36,6 +38,6 @@ app.listen(env.port, () => {
   console.log(`  admin:       ${env.publicUrl}/admin`);
   console.log(`  help center: ${env.publicUrl}/help`);
   console.log(`  demo page:   ${env.publicUrl}/demo`);
-  console.log(`  database:    ${env.databaseUrl ? "postgres" : `pglite (${env.pgliteDir})`}`);
+  console.log(`  database:    ${env.databaseUrl === MEMORY_DB ? "in-memory (data is lost when the server stops)" : "postgres"}`);
   console.log(`  AI:          ${env.anthropicKey ? env.aiModel : "off (set ANTHROPIC_API_KEY)"}`);
 });

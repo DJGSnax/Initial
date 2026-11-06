@@ -14,8 +14,12 @@ An internal knowledge base with an embeddable snippet for in-app guidance.
 
 ```bash
 npm install
-npm run seed          # demo collections, 10 articles and 4 live prompts
-ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=pick-a-long-one npm run dev
+# Try it with a throwaway in-memory database and demo content:
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=pick-a-long-one npm run dev:demo
+
+# Or against your hosted Postgres:
+DATABASE_URL=postgres://... npm run seed   # demo collections, 10 articles and 4 live prompts (optional)
+DATABASE_URL=postgres://... ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=pick-a-long-one npm run dev
 ```
 
 Then open:
@@ -26,7 +30,7 @@ Then open:
 | http://localhost:5174/help | Public help center |
 | http://localhost:5174/demo | A fake host app with the snippet installed: the welcome tour, banner, hotspot, launcher and nudges all run here |
 
-Without `DATABASE_URL`, the app uses **PGlite** (real Postgres compiled to WASM) in `./data/pglite`, so there's nothing else to install. Set `DATABASE_URL` to use a normal Postgres (Neon, Railway, etc). Migrations run on boot.
+**Lumen never stores data on the local disk.** `DATABASE_URL` is required and must be either a hosted Postgres (Railway, Neon, etc) or `memory://`, an in-memory Postgres that is wiped when the server stops (demos and tests only, refused in production). The server won't start with a missing or file-based database. Migrations run on boot.
 
 To turn on AI, set `ANTHROPIC_API_KEY`. Without it, search still works, the AI overview is hidden, and nudges fall back to articles pinned to the page.
 
@@ -98,7 +102,7 @@ All Claude calls are in `server/lib/ai.ts`. Each one uses `claude-opus-5-5` (ove
 
 ```
 server/            Express API (TypeScript)
-  db/              Drizzle schema, migrations, Postgres/PGlite client
+  db/              Drizzle schema, migrations, Postgres client (plus in-memory mode)
   lib/             privacy, search, markdown sanitizing, auth, AI, settings
   routes/          admin API (session auth) and public API (CORS, no cookies)
 client/            React admin + help center (Vite, Tailwind)
@@ -112,11 +116,12 @@ test/              node:test unit + API integration tests (in-memory PGlite)
 
 | | |
 | --- | --- |
-| `npm run dev` | API + Vite (one port) + embed watcher |
+| `npm run dev` | API + Vite (one port) + embed watcher, against `DATABASE_URL` |
+| `npm run dev:demo` | Same, with an in-memory database preloaded with demo content |
 | `npm test` | Unit and integration tests |
 | `npm run typecheck` | TypeScript across everything |
 | `npm run build` / `npm start` | Production build and server |
-| `npm run seed` | Demo content (safe to re-run) |
+| `npm run seed` | Demo content into the database in `DATABASE_URL` (safe to re-run) |
 | `npm run db:generate` | New migration after editing `server/db/schema.ts` |
 
 ## Deploying

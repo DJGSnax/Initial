@@ -18,14 +18,25 @@ function migrationsFolder() {
 let dbInstance: DB | null = null;
 let closeFn: (() => Promise<void>) | null = null;
 
+export const MEMORY_DB = "memory://";
+
 /**
- * Uses Postgres when DATABASE_URL is set, otherwise an embedded PGlite database
- * (real Postgres compiled to WASM) so local dev needs no setup.
- * PGLITE_DIR=memory:// gives a throwaway in-memory database (used by tests).
+ * Project rule: app data is never written to the local disk.
+ * - DATABASE_URL=postgres://... uses a hosted Postgres (the normal case).
+ * - DATABASE_URL=memory:// uses an in-memory Postgres (PGlite) that is gone when the process exits.
+ *   Only for demos and tests.
+ * Anything else, including no DATABASE_URL, refuses to start.
  */
 export async function initDb(): Promise<DB> {
   if (dbInstance) return dbInstance;
-  if (env.databaseUrl) {
+  if (!env.databaseUrl) {
+    throw new Error(
+      "DATABASE_URL is required. Point it at a hosted Postgres (e.g. Railway or Neon), or set DATABASE_URL=memory:// for a throwaway in-memory database. Lumen never stores data on the local disk.",
+    );
+  }
+  if (env.databaseUrl === MEMORY_DB && env.isProd) throw new Error("DATABASE_URL=memory:// loses all data on restart and is not allowed in production");
+  if (env.databaseUrl !== MEMORY_DB) {
+    if (!/^postgres(ql)?:\/\//.test(env.databaseUrl)) throw new Error("DATABASE_URL must be a postgres:// URL or memory://");
     const { Pool } = await import("pg");
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const { migrate } = await import("drizzle-orm/node-postgres/migrator");
@@ -38,8 +49,7 @@ export async function initDb(): Promise<DB> {
     const { PGlite } = await import("@electric-sql/pglite");
     const { drizzle } = await import("drizzle-orm/pglite");
     const { migrate } = await import("drizzle-orm/pglite/migrator");
-    if (!env.pgliteDir.startsWith("memory://")) fs.mkdirSync(env.pgliteDir, { recursive: true });
-    const client = new PGlite(env.pgliteDir);
+    const client = new PGlite(MEMORY_DB);
     const db = drizzle(client, { schema });
     await migrate(db, { migrationsFolder: migrationsFolder() });
     dbInstance = db as unknown as DB;

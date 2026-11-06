@@ -3,7 +3,7 @@
  * Safe to re-run: skips anything whose slug or name already exists.
  */
 import { eq } from "drizzle-orm";
-import { closeDb, db, initDb } from "./db/client";
+import { db } from "./db/client";
 import { articles, collections, prompts } from "./db/schema";
 import { htmlToText, renderMarkdown } from "./lib/markdown";
 import type { PromptDefinition } from "../shared/types";
@@ -263,8 +263,8 @@ const PROMPTS: { name: string; type: "tour" | "hotspot" | "banner" | "tooltip" |
   },
 ];
 
-async function main() {
-  await initDb();
+/** Inserts demo content into the already-initialised database. */
+export async function seedDemo() {
   const colIds: Record<string, number> = {};
   for (const c of COLLECTIONS) {
     const existing = await db().query.collections.findFirst({ where: eq(collections.slug, c.slug) });
@@ -299,11 +299,5 @@ async function main() {
     await db().insert(prompts).values(p);
     pN++;
   }
-  console.log(`Seeded ${COLLECTIONS.length} collections, ${n} new articles, ${pN} new prompts.`);
-  await closeDb();
+  console.log(`[seed] ${COLLECTIONS.length} collections, ${n} new articles, ${pN} new prompts`);
 }
-
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});

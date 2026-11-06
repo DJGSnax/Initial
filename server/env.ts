@@ -27,7 +27,8 @@ export const env = {
   port,
   publicUrl: (process.env.PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, ""),
   databaseUrl: process.env.DATABASE_URL,
-  pgliteDir: process.env.PGLITE_DIR ?? "./data/pglite",
+  /** Load the demo collections, articles and prompts at startup (handy with DATABASE_URL=memory://). */
+  seedDemo: process.env.SEED_DEMO === "1",
   appSecret: secret("APP_SECRET"),
   visitorPepper: secret("VISITOR_PEPPER"),
   adminEmail: process.env.ADMIN_EMAIL,

@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import type { Server } from "node:http";
 
 process.env.NODE_ENV = "test";
-process.env.PGLITE_DIR = "memory://";
-delete process.env.DATABASE_URL;
+process.env.DATABASE_URL = "memory://";
 delete process.env.ANTHROPIC_API_KEY;
 process.env.PRIVACY_API_TOKEN = "test-privacy-token-123";
 

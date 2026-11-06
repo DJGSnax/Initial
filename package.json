@@ -11,10 +11,11 @@
     "build": "vite build && node scripts/build-embed.mjs && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/server/index.js && cp -r server/db/migrations dist/server/",
     "start": "NODE_ENV=production node dist/server/index.js",
     "db:generate": "drizzle-kit generate",
-    "seed": "tsx server/seed.ts",
+    "seed": "tsx server/seed-cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
-    "build:embed": "node scripts/build-embed.mjs"
+    "build:embed": "node scripts/build-embed.mjs",
+    "dev:demo": "DATABASE_URL=memory:// SEED_DEMO=1 npm run dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
