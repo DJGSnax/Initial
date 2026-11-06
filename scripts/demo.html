@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northwind Projects (demo host app)</title>
+<style>
+  :root { --bg:#f7f7fb; --fg:#1b1d23; --muted:#646b78; --card:#fff; --border:#e4e6ec; --brand:#0f766e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111317; --fg:#eceef2; --muted:#9aa1ad; --card:#1a1d23; --border:#2b2f38; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; align-items:center; gap:24px; padding:0 24px; height:60px; background:var(--card); border-bottom:1px solid var(--border); position:sticky; top:0; }
+  header strong { color:var(--brand); }
+  nav { display:flex; gap:4px; flex-wrap:wrap; }
+  nav a { padding:6px 12px; border-radius:8px; color:var(--muted); text-decoration:none; }
+  nav a.on, nav a:hover { background:var(--bg); color:var(--fg); }
+  main { max-width:960px; margin:0 auto; padding:32px 24px 120px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; margin:20px 0; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  .card h3 { margin:0 0 6px; font-size:15px; } .card p { margin:0; color:var(--muted); font-size:14px; }
+  button.app { background:var(--brand); color:#fff; border:0; padding:9px 16px; border-radius:8px; font:inherit; font-weight:600; cursor:pointer; }
+  button.app.secondary { background:var(--card); color:var(--fg); border:1px solid var(--border); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  label { display:block; font-size:13px; font-weight:600; margin:14px 0 4px; }
+  input, select { width:100%; max-width:360px; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font:inherit; background:var(--card); color:var(--fg); }
+  input[aria-invalid=true] { border-color:#dc2626; }
+  .err { color:#dc2626; font-size:13px; margin-top:4px; }
+  .consent { position:fixed; left:16px; bottom:16px; max-width:380px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:0 8px 30px rgba(0,0,0,.15); font-size:14px; z-index:10; }
+  .consent p { margin:0 0 10px; }
+  .muted { color:var(--muted); font-size:13px; }
+  code { background:var(--card); border:1px solid var(--border); padding:1px 5px; border-radius:5px; font-size:13px; }
+</style>
+<!-- 1. Lumen snippet: queue stub + consent + identity -->
+<script>
+  window.kb = window.kb || function () { (kb.q = kb.q || []).push(arguments) };
+  // Your consent tool decides this. Re-send on every page load.
+  var choice = localStorage.getItem('demo-consent');
+  if (choice) kb('consent', { analytics: choice === 'yes' });
+  // Your backend computes this: HMAC_SHA256(KB_IDENTITY_SECRET, user.id). Never an email.
+  kb('identify', { id: 'u_3f9a1c7e5b2d4a60', traits: { plan: 'trial', role: 'admin', account_age_days: 3 } });
+</script>
+<script async src="%BASE%/embed/kb.js"></script>
+</head>
+<body>
+<header>
+  <strong>Northwind</strong>
+  <nav id="nav">
+    <a href="/demo" data-kb-id="nav-dashboard">Dashboard</a>
+    <a href="/demo/projects" data-kb-id="nav-projects">Projects</a>
+    <a href="/demo/billing" data-kb-id="nav-billing">Billing</a>
+    <a href="/demo/settings/team" data-kb-id="nav-team">Team</a>
+  </nav>
+</header>
+<main id="view"></main>
+
+<div class="consent" id="consent" hidden>
+  <p><strong>Analytics cookies?</strong> We use pseudonymous analytics to improve help content. No names or emails.</p>
+  <div class="row">
+    <button class="app" onclick="setConsent('yes')">Accept</button>
+    <button class="app secondary" onclick="setConsent('no')">Decline</button>
+  </div>
+</div>
+
+<script>
+  const views = {
+    '/demo': () => `
+      <h1>Welcome back</h1>
+      <p class="muted">This fake app exists to exercise the Lumen snippet: launcher, prompts, tours and nudges.</p>
+      <div class="grid">
+        <div class="card"><h3>Active projects</h3><p>4 projects, 2 due this week</p></div>
+        <div class="card"><h3>Team</h3><p>6 members, 1 pending invite</p></div>
+        <div class="card"><h3>Usage</h3><p>72% of trial storage used</p></div>
+      </div>
+      <div class="row">
+        <button class="app" data-kb-id="new-project" onclick="go('/demo/projects')">New project</button>
+        <button class="app secondary" data-kb-id="import-data">Import data</button>
+        <button class="app secondary" onclick="kb('track','opened_reports')">Fire custom event</button>
+      </div>`,
+    '/demo/projects': () => `
+      <h1>Projects</h1>
+      <div class="row" style="margin:16px 0">
+        <button class="app" data-kb-id="create-project">Create project</button>
+        <button class="app secondary" data-kb-id="export-csv">Export CSV</button>
+      </div>
+      <div class="grid">
+        <div class="card"><h3>Website relaunch</h3><p>12 tasks · due Friday</p></div>
+        <div class="card"><h3>Q3 onboarding</h3><p>8 tasks · on track</p></div>
+      </div>`,
+    '/demo/billing': () => `
+      <h1>Billing</h1>
+      <p class="muted">Trial ends in 11 days.</p>
+      <form onsubmit="return pay(event)" novalidate>
+        <label for="card">Card number</label>
+        <input id="card" data-kb-private autocomplete="off" placeholder="4242 4242 4242 4242">
+        <div id="card-err" class="err" role="alert"></div>
+        <label for="plan">Plan</label>
+        <select id="plan" data-kb-id="plan-select"><option>Starter</option><option>Team</option><option>Business</option></select>
+        <p><button class="app" data-kb-id="upgrade">Upgrade</button></p>
+      </form>`,
+    '/demo/settings/team': () => `
+      <h1>Team</h1>
+      <label for="invite">Invite by email</label>
+      <div class="row"><input id="invite" placeholder="name@company.com"><button class="app" data-kb-id="send-invite">Send invite</button></div>
+      <p class="muted">Tip: click "Send invite" quickly several times to trigger a rage-click nudge.</p>`,
+  };
+  function render() {
+    const path = location.pathname.replace(/\/$/, '') || '/demo';
+    document.getElementById('view').innerHTML = (views[path] || views['/demo'])();
+    document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === path));
+  }
+  function go(path) { history.pushState({}, '', path); render(); }
+  document.addEventListener('click', e => {
+    const a = e.target.closest('#nav a');
+    if (a) { e.preventDefault(); go(a.getAttribute('href')); }
+  });
+  window.addEventListener('popstate', render);
+  function pay(e) {
+    e.preventDefault();
+    const input = document.getElementById('card');
+    input.setAttribute('aria-invalid', 'true');
+    document.getElementById('card-err').textContent = 'Card was declined. Check the number and try again.';
+    return false;
+  }
+  function setConsent(v) {
+    localStorage.setItem('demo-consent', v);
+    kb('consent', { analytics: v === 'yes' });
+    document.getElementById('consent').hidden = true;
+  }
+  if (!localStorage.getItem('demo-consent')) document.getElementById('consent').hidden = false;
+  render();
+</script>
+</body>
+</html>
