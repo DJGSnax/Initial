@@ -37,7 +37,7 @@ export function Dashboard() {
         title="Overview"
         description="How people use the help center and in-app guidance."
         actions={
-          <Select value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-36" aria-label="Date range">
+          <Select value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-44" aria-label="Date range">
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
